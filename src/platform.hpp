@@ -71,6 +71,8 @@ struct Manager {
     float p1RotationDelta;
     float p2RotationDelta;
 
+    bool midStep = false;
+
     inline static Manager& get() {
         static Manager instance;
         return instance;

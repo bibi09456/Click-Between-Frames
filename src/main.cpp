@@ -251,6 +251,7 @@ class $modify(PlayerObject) {
 		manager.p2Pos = p2->getPosition();
 
 		cbf::Step step;
+		manager.midStep = true;
 
 		do {
 			step = updateDeltaFactorAndInput();
@@ -302,6 +303,8 @@ class $modify(PlayerObject) {
 			firstLoop = false;
 
 		} while (!step.endStep);
+
+		manager.midStep = false;
 	}
 
 	void updateRotation(float t) {
@@ -310,7 +313,7 @@ class $modify(PlayerObject) {
 		if (!manager.skipUpdate && pl && this == pl->m_player1) {
 			PlayerObject::updateRotation(manager.p1RotationDelta);
 
-			if (manager.p1Pos.x && !manager.skipUpdate) { // to happen only when GJBGL::update() calls updateRotation after an input
+			if (manager.p1Pos.x && !manager.midStep) { // to happen only when GJBGL::update() calls updateRotation after an input
 				this->m_lastPosition = manager.p1Pos;
 				manager.p1Pos.setPoint(0.f, 0.f);
 			}
@@ -318,7 +321,7 @@ class $modify(PlayerObject) {
 		else if (!manager.skipUpdate && pl && this == pl->m_player2) {
 			PlayerObject::updateRotation(manager.p2RotationDelta);
 
-			if (manager.p2Pos.x && !manager.skipUpdate) {
+			if (manager.p2Pos.x && !manager.midStep) {
 				pl->m_player2->m_lastPosition = manager.p2Pos;
 				manager.p2Pos.setPoint(0.f, 0.f);
 			}
