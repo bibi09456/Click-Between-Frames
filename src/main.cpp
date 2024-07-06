@@ -111,11 +111,6 @@ cbf::Step updateDeltaFactorAndInput() {
 	manager.nextInput = front.input;
 	manager.stepQueue.pop();
 
-	if (manager.nextInput.time != 0) {
-		manager.enableP1CollisionAndRotation = false;
-		manager.enableP2CollisionAndRotation = false;
-	}
-
 	return front;
 }
 
@@ -163,8 +158,17 @@ class $modify(CCDirector) {
 };
 #endif
 
-// int lastP1CollisionCheck = 0;
-// int lastP2CollisionCheck = 0;
+void newResetCollisionLog(PlayerObject* p) { // inlined in 2.206...
+	(*(CCDictionary**)((char*)p + 0x5b0))->removeAllObjects();
+	(*(CCDictionary**)((char*)p + 0x5b8))->removeAllObjects();
+	(*(CCDictionary**)((char*)p + 0x5c0))->removeAllObjects();
+	(*(CCDictionary**)((char*)p + 0x5c8))->removeAllObjects();
+	*(unsigned long*)((char*)p + 0x5e0) = *(unsigned long*)((char*)p + 0x5d0);
+	*(long long*)((char*)p + 0x5d0) = -1;
+}
+
+// float p1CollisionDelta;
+// float p2CollisionDelta;
 // bool actualDelta;
 
 class $modify(GJBaseGameLayer) {
@@ -196,15 +200,13 @@ class $modify(GJBaseGameLayer) {
 		return modifiedDelta;
 	}
 
-	int checkCollisions(PlayerObject *p, float t, bool d) {
+	int checkCollisions(PlayerObject* p, float t, bool d) {
 		auto& manager = cbf::Manager::get();
-		if (p == this->m_player1) {
-			if (manager.enableP1CollisionAndRotation || manager.skipUpdate) manager.lastP1CollisionCheck = GJBaseGameLayer::checkCollisions(p, t, d);
-			return manager.lastP1CollisionCheck;
+		if (!manager.skipUpdate && p == this->m_player1) {
+			return GJBaseGameLayer::checkCollisions(p, manager.p1CollisionDelta, d);
 		}
-		else if (p == this->m_player2) {
-			if (manager.enableP2CollisionAndRotation || manager.skipUpdate) manager.lastP2CollisionCheck = GJBaseGameLayer::checkCollisions(p, t, d);
-			return manager.lastP2CollisionCheck;
+		else if (!manager.skipUpdate && p == this->m_player2) {
+			return GJBaseGameLayer::checkCollisions(p, manager.p2CollisionDelta, d);
 		}
 		else return GJBaseGameLayer::checkCollisions(p, t, d);
 	}
@@ -212,6 +214,7 @@ class $modify(GJBaseGameLayer) {
 
 class $modify(PlayerObject) {
 	void update(float timeFactor) {
+
 		PlayLayer* pl = PlayLayer::get();
 		auto& manager = cbf::Manager::get();
 
@@ -223,9 +226,8 @@ class $modify(PlayerObject) {
 			return;
 		}
 
-		if (this == pl->m_player2) return;
-
 		PlayerObject* p2 = pl->m_player2;
+		if (this == p2) return;
 
 		bool isDual = pl->m_gameState.m_isDualMode;
 		bool isPlatformer = this->m_isPlatformer;
@@ -242,9 +244,8 @@ class $modify(PlayerObject) {
 			|| p2->m_touchingRings->count()
 			|| (p2->m_isDart || p2->m_isBird || p2->m_isShip || p2->m_isSwing);
 
-		manager.enableP1CollisionAndRotation = true;
-		manager.enableP2CollisionAndRotation = true;
-		manager.skipUpdate = true; // enable collision & rotation checks for the duration of the step update-collision-rotation loop
+		manager.p1CollisionDelta = timeFactor;
+		manager.p2CollisionDelta = timeFactor;
 
 		manager.p1Pos = PlayerObject::getPosition();
 		manager.p2Pos = p2->getPosition();
@@ -255,66 +256,67 @@ class $modify(PlayerObject) {
 			step = updateDeltaFactorAndInput();
 			const float newTimeFactor = timeFactor * step.deltaFactor;
 
+			manager.p1RotationDelta = newTimeFactor;
+			manager.p2RotationDelta = newTimeFactor;
+
 			if (p1NotBuffering) {
 				if (step.deltaFactor != 1.0)
 					log::debug("inserting new time step at {:.3f} - delta {:.5f}", newTimeFactor, step.deltaFactor);
 				PlayerObject::update(newTimeFactor);
-				if (!isPlatformer && !manager.enableP1CollisionAndRotation) {
-					pl->checkCollisions(this, newTimeFactor, true);
-					PlayerObject::updateRotation(newTimeFactor);
+				if (this->m_isDart && !step.endStep) {
+					manager.p1CollisionDelta = newTimeFactor;
+					pl->checkCollisions(this, newTimeFactor, true); // only passing newTimeFactor for compatibility with other mods
+					newResetCollisionLog(this);
 				}
-				else if (isPlatformer && step.deltaFactor != 1.0) {  // checking collision extra times in platformer breaks moving platforms so this is a scuffed temporary fix
+				else if (step.deltaFactor != 1.0) {  // checking collision extra times seems to break moving platforms but is necessary for d blocks in wave
 					if (firstLoop) this->m_isOnGround = p1StartedOnGround;
 					else this->m_isOnGround = false;
-
-					manager.enableP1CollisionAndRotation = true;
 				}
+
+				if (!step.endStep) PlayerObject::updateRotation(newTimeFactor);
 			}
 			else if (step.endStep) { // disable cbf for buffers, revert to click-on-steps mode 
 				PlayerObject::update(timeFactor);
-				manager.enableP1CollisionAndRotation = true;
 			}
 
 			if (isDual) {
 				if (p2NotBuffering) {
 					p2->update(newTimeFactor);
-					if (!isPlatformer && !manager.enableP2CollisionAndRotation) {
+					if (p2->m_isDart && !step.endStep) {
+						manager.p2CollisionDelta = newTimeFactor;
 						pl->checkCollisions(p2, newTimeFactor, true);
-						p2->updateRotation(newTimeFactor);
+						newResetCollisionLog(p2);
 					}
-					else if (isPlatformer && step.deltaFactor != 1.0) {
+					else if (step.deltaFactor != 1.0) {
 						if (firstLoop) p2->m_isOnGround = p2StartedOnGround;
 						else p2->m_isOnGround = false;
-
-						manager.enableP2CollisionAndRotation = true;
 					}
+
+					if (!step.endStep) p2->updateRotation(newTimeFactor);
 				}
 				else if (step.endStep) {
 					p2->update(timeFactor);
-					manager.enableP2CollisionAndRotation = true;
 				}
 			}
 
 			firstLoop = false;
 
 		} while (!step.endStep);
-
-		manager.skipUpdate = false;
 	}
 
 	void updateRotation(float t) {
 		auto& manager = cbf::Manager::get();
 		PlayLayer* pl = PlayLayer::get();
-		if (pl && this == pl->m_player1) {
-			if (manager.enableP1CollisionAndRotation || manager.skipUpdate) PlayerObject::updateRotation(t);
+		if (!manager.skipUpdate && pl && this == pl->m_player1) {
+			PlayerObject::updateRotation(manager.p1RotationDelta);
 
 			if (manager.p1Pos.x && !manager.skipUpdate) { // to happen only when GJBGL::update() calls updateRotation after an input
 				this->m_lastPosition = manager.p1Pos;
 				manager.p1Pos.setPoint(0.f, 0.f);
 			}
 		}
-		else if (pl && this == pl->m_player2) {
-			if (manager.enableP2CollisionAndRotation || manager.skipUpdate) PlayerObject::updateRotation(t);
+		else if (!manager.skipUpdate && pl && this == pl->m_player2) {
+			PlayerObject::updateRotation(manager.p2RotationDelta);
 
 			if (manager.p2Pos.x && !manager.skipUpdate) {
 				pl->m_player2->m_lastPosition = manager.p2Pos;
@@ -338,11 +340,11 @@ class $modify(EndLevelLayer) {
 			else text = "CBF";
 
 			cocos2d::CCSize size = cocos2d::CCDirector::sharedDirector()->getWinSize();
-			CCLabelBMFont *indicator = CCLabelBMFont::create(text.c_str(), "bigFont.fnt");
+			CCLabelBMFont* indicator = CCLabelBMFont::create(text.c_str(), "bigFont.fnt");
 
 			indicator->setPosition({ size.width, size.height });
 			indicator->setAnchorPoint({ 1.0f, 1.0f });
-			indicator->setOpacity(90);
+			indicator->setOpacity(30);
 			indicator->setScale(0.2f);
 
 			this->addChild(indicator);
@@ -350,7 +352,7 @@ class $modify(EndLevelLayer) {
 	}
 };
 
-Patch *patch = nullptr;
+Patch* patch = nullptr;
 
 void toggleMod(bool disable) {
 	auto& manager = cbf::Manager::get();

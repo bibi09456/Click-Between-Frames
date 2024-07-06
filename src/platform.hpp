@@ -59,14 +59,17 @@ struct Manager {
     bool enableP1CollisionAndRotation = true;
     bool enableP2CollisionAndRotation = true;
 
-    int lastP1CollisionCheck = 0;
-    int lastP2CollisionCheck = 0;
+    float p1CollisionDelta;
+    float p2CollisionDelta;
     bool actualDelta = false;
 
     bool softToggle = false; // cant just disable all hooks bc thatll cause a memory leak with inputQueue, may improve this in the future
 
     cocos2d::CCPoint p1Pos = { 0.f, 0.f };
     cocos2d::CCPoint p2Pos = { 0.f, 0.f };
+
+    float p1RotationDelta;
+    float p2RotationDelta;
 
     inline static Manager& get() {
         static Manager instance;
