@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_OSX_ARCHITECTURES "x86_64")
+set(CMAKE_OSX_ARCHITECTURES "arm64")
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
 project(ClickBetweenFrames VERSION 1.0.0)
@@ -14,6 +14,9 @@ if (WIN32)
     target_sources(${PROJECT_NAME} PRIVATE src/windows.cpp)
 elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Android")
     target_sources(${PROJECT_NAME} PRIVATE src/android.cpp)
+elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+    set_source_files_properties(src/macos.mm PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+    target_sources(${PROJECT_NAME} PRIVATE src/macos.mm)
 endif()
 
 if (NOT DEFINED ENV{GEODE_SDK})

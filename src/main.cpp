@@ -144,9 +144,10 @@ void clearQueuesBeforeLoop() {
 		}
 	}
 }
-#ifdef GEODE_IS_ANDROID
+#ifndef GEODE_IS_WINDOWS
 #include <Geode/modify/CCDirector.hpp>
-// CCDirector::setDeltaTime is too small to hook
+// CCDirector::setDeltaTime is too small to hook on android
+// and setDeltaTime is not found on mac..
 class $modify(CCDirector) {
 	void drawScene() {
 		clearQueuesBeforeLoop();
