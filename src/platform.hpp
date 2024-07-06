@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <Geode/Geode.hpp>
+#include <queue>
 
 namespace cbf {
 
@@ -39,7 +40,7 @@ struct Manager {
     std::mutex inputQueueLock;
     std::mutex keybindsLock;
 
-    bool enableRightClick;
+    bool enableRightClick = false;
 
     std::queue<Input> inputQueueCopy;
     std::queue<Step> stepQueue;
@@ -53,16 +54,16 @@ struct Manager {
     bool firstFrame = true;
     bool skipUpdate = true;
     bool enableInput = false;
-    bool lateCutoff;
+    bool lateCutoff = false;
 
     bool enableP1CollisionAndRotation = true;
     bool enableP2CollisionAndRotation = true;
 
     int lastP1CollisionCheck = 0;
     int lastP2CollisionCheck = 0;
-    bool actualDelta;
+    bool actualDelta = false;
 
-    bool softToggle; // cant just disable all hooks bc thatll cause a memory leak with inputQueue, may improve this in the future
+    bool softToggle = false; // cant just disable all hooks bc thatll cause a memory leak with inputQueue, may improve this in the future
 
     cocos2d::CCPoint p1Pos = { 0.f, 0.f };
     cocos2d::CCPoint p2Pos = { 0.f, 0.f };

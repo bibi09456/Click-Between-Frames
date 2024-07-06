@@ -12,8 +12,6 @@
 #include <Geode/modify/PlayerObject.hpp>
 #include <Geode/modify/EndLevelLayer.hpp>
 
-#include <geode.custom-keybinds/include/Keybinds.hpp>
-
 #include "platform.hpp"
 
 using namespace geode::prelude;
@@ -38,6 +36,7 @@ void updateInputQueueAndTime(int stepCount) {
 
 		{
 			std::lock_guard lock(manager.inputQueueLock);
+			
 			if (manager.lateCutoff) {
 				manager.currentFrameTime = cbf::getCurrentTime();
 				// QueryPerformanceCounter(&currentFrameTime); // done within the critical section to prevent a race condition which could cause dropped inputs
@@ -120,37 +119,48 @@ cbf::Step updateDeltaFactorAndInput() {
 	return front;
 }
 
-// bool softToggle; // cant just disable all hooks bc thatll cause a memory leak with inputQueue, may improve this in the future
+void clearQueuesBeforeLoop() {
+	PlayLayer* playLayer = PlayLayer::get();
+	CCNode* par;
+	auto& manager = cbf::Manager::get();
 
+	if (!manager.lateCutoff) manager.currentFrameTime = cbf::getCurrentTime();
+
+	if (manager.softToggle 
+		|| !playLayer 
+		|| !(par = playLayer->getParent()) 
+		|| (getChildOfType<PauseLayer>(par, 0) != nullptr)) 
+	{
+		manager.firstFrame = true;
+		manager.skipUpdate = true;
+		manager.enableInput = true;
+
+		std::queue<cbf::Input>().swap(manager.inputQueueCopy);
+
+		{
+			std::lock_guard lock(manager.inputQueueLock);
+			manager.inputQueue = {};
+			// std::queue<struct inputEvent>().swap(inputQueue);
+		}
+	}
+}
+#ifdef GEODE_IS_ANDROID
+#include <Geode/modify/CCDirector.hpp>
+// CCDirector::setDeltaTime is too small to hook
+class $modify(CCDirector) {
+	void drawScene() {
+		clearQueuesBeforeLoop();
+		CCDirector::drawScene();
+	}
+};
+#else
 class $modify(CCDirector) {
 	void setDeltaTime(float dTime) {
-		PlayLayer* playLayer = PlayLayer::get();
-		CCNode* par;
-		auto& manager = cbf::Manager::get();
-
-		if (!manager.lateCutoff) manager.currentFrameTime = cbf::getCurrentTime();
-
-		if (manager.softToggle 
-			|| !playLayer 
-			|| !(par = playLayer->getParent()) 
-			|| (getChildOfType<PauseLayer>(par, 0) != nullptr)) 
-		{
-			manager.firstFrame = true;
-			manager.skipUpdate = true;
-			manager.enableInput = true;
-
-			std::queue<cbf::Input>().swap(manager.inputQueueCopy);
-
-			{
-				std::lock_guard lock(manager.inputQueueLock);
-				manager.inputQueue = {};
-				// std::queue<struct inputEvent>().swap(inputQueue);
-			}
-		}
-
+		clearQueuesBeforeLoop();
 		CCDirector::setDeltaTime(dTime);
 	}
 };
+#endif
 
 // int lastP1CollisionCheck = 0;
 // int lastP2CollisionCheck = 0;
@@ -199,9 +209,6 @@ class $modify(GJBaseGameLayer) {
 	}
 };
 
-// CCPoint p1Pos = { NULL, NULL };
-// CCPoint p2Pos = { NULL, NULL };
-
 class $modify(PlayerObject) {
 	void update(float timeFactor) {
 		PlayLayer* pl = PlayLayer::get();
@@ -248,6 +255,8 @@ class $modify(PlayerObject) {
 			const float newTimeFactor = timeFactor * step.deltaFactor;
 
 			if (p1NotBuffering) {
+				if (step.deltaFactor != 1.0)
+					log::debug("inserting new time step at {:.3f} - delta {:.5f}", newTimeFactor, step.deltaFactor);
 				PlayerObject::update(newTimeFactor);
 				if (!isPlatformer && !manager.enableP1CollisionAndRotation) {
 					pl->checkCollisions(this, newTimeFactor, true);
@@ -300,7 +309,7 @@ class $modify(PlayerObject) {
 
 			if (manager.p1Pos.x && !manager.skipUpdate) { // to happen only when GJBGL::update() calls updateRotation after an input
 				this->m_lastPosition = manager.p1Pos;
-				manager.p1Pos.setPoint(NULL, NULL);
+				manager.p1Pos.setPoint(0.f, 0.f);
 			}
 		}
 		else if (pl && this == pl->m_player2) {
@@ -308,7 +317,7 @@ class $modify(PlayerObject) {
 
 			if (manager.p2Pos.x && !manager.skipUpdate) {
 				pl->m_player2->m_lastPosition = manager.p2Pos;
-				manager.p2Pos.setPoint(NULL, NULL);
+				manager.p2Pos.setPoint(0.f, 0.f);
 			}
 		}
 		else PlayerObject::updateRotation(t);
@@ -344,6 +353,7 @@ Patch *patch = nullptr;
 
 void toggleMod(bool disable) {
 	auto& manager = cbf::Manager::get();
+#ifdef GEODE_IS_WINDOWS
 	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x5ec8e8);
 
 	if (!patch) patch = Mod::get()->patch(addr, { 0x29, 0x5c, 0x4f, 0x3f }).value_or(nullptr);
@@ -352,6 +362,7 @@ void toggleMod(bool disable) {
 		if (disable) patch->disable();
 		else patch->enable();
 	}
+#endif
 
 	manager.softToggle = disable;
 }

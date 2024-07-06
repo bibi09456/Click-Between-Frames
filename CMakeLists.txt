@@ -12,6 +12,8 @@ add_library(${PROJECT_NAME} SHARED
 
 if (WIN32)
     target_sources(${PROJECT_NAME} PRIVATE src/windows.cpp)
+elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Android")
+    target_sources(${PROJECT_NAME} PRIVATE src/android.cpp)
 endif()
 
 if (NOT DEFINED ENV{GEODE_SDK})
