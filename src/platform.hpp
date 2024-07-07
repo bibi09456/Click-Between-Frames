@@ -68,8 +68,7 @@ struct Manager {
     cocos2d::CCPoint p1Pos = { 0.f, 0.f };
     cocos2d::CCPoint p2Pos = { 0.f, 0.f };
 
-    float p1RotationDelta;
-    float p2RotationDelta;
+    float rotationDelta;
 
     bool midStep = false;
 

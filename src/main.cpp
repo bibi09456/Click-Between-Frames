@@ -199,17 +199,6 @@ class $modify(GJBaseGameLayer) {
 		
 		return modifiedDelta;
 	}
-
-	int checkCollisions(PlayerObject* p, float t, bool d) {
-		auto& manager = cbf::Manager::get();
-		if (!manager.skipUpdate && p == this->m_player1) {
-			return GJBaseGameLayer::checkCollisions(p, manager.p1CollisionDelta, d);
-		}
-		else if (!manager.skipUpdate && p == this->m_player2) {
-			return GJBaseGameLayer::checkCollisions(p, manager.p2CollisionDelta, d);
-		}
-		else return GJBaseGameLayer::checkCollisions(p, t, d);
-	}
 };
 
 class $modify(PlayerObject) {
@@ -230,8 +219,6 @@ class $modify(PlayerObject) {
 		if (this == p2) return;
 
 		bool isDual = pl->m_gameState.m_isDualMode;
-		bool isPlatformer = this->m_isPlatformer;
-		bool firstLoop = true;
 
 		bool p1StartedOnGround = this->m_isOnGround;
 		bool p2StartedOnGround = p2->m_isOnGround;
@@ -244,9 +231,6 @@ class $modify(PlayerObject) {
 			|| p2->m_touchingRings->count()
 			|| (p2->m_isDart || p2->m_isBird || p2->m_isShip || p2->m_isSwing);
 
-		manager.p1CollisionDelta = timeFactor;
-		manager.p2CollisionDelta = timeFactor;
-
 		manager.p1Pos = PlayerObject::getPosition();
 		manager.p2Pos = p2->getPosition();
 
@@ -255,25 +239,19 @@ class $modify(PlayerObject) {
 
 		do {
 			step = updateDeltaFactorAndInput();
-			const float newTimeFactor = timeFactor * step.deltaFactor;
 
-			manager.p1RotationDelta = newTimeFactor;
-			manager.p2RotationDelta = newTimeFactor;
+			const float newTimeFactor = timeFactor * step.deltaFactor;
+			manager.rotationDelta = newTimeFactor;
 
 			if (p1NotBuffering) {
 				if (step.deltaFactor != 1.0)
 					log::debug("inserting new time step at {:.3f} - delta {:.5f}", newTimeFactor, step.deltaFactor);
 				PlayerObject::update(newTimeFactor);
-				if (this->m_isDart && !step.endStep) {
+				if (!step.endStep) {
 					manager.p1CollisionDelta = newTimeFactor;
-					pl->checkCollisions(this, newTimeFactor, true); // only passing newTimeFactor for compatibility with other mods
+					pl->checkCollisions(this, 0.0f, true);
 					newResetCollisionLog(this);
 				}
-				else if (step.deltaFactor != 1.0) {  // checking collision extra times seems to break moving platforms but is necessary for d blocks in wave
-					if (firstLoop) this->m_isOnGround = p1StartedOnGround;
-					else this->m_isOnGround = false;
-				}
-
 				if (!step.endStep) PlayerObject::updateRotation(newTimeFactor);
 			}
 			else if (step.endStep) { // disable cbf for buffers, revert to click-on-steps mode 
@@ -283,24 +261,17 @@ class $modify(PlayerObject) {
 			if (isDual) {
 				if (p2NotBuffering) {
 					p2->update(newTimeFactor);
-					if (p2->m_isDart && !step.endStep) {
+					if (!step.endStep) {
 						manager.p2CollisionDelta = newTimeFactor;
-						pl->checkCollisions(p2, newTimeFactor, true);
+						pl->checkCollisions(p2, 0.0f, true);
 						newResetCollisionLog(p2);
 					}
-					else if (step.deltaFactor != 1.0) {
-						if (firstLoop) p2->m_isOnGround = p2StartedOnGround;
-						else p2->m_isOnGround = false;
-					}
-
 					if (!step.endStep) p2->updateRotation(newTimeFactor);
 				}
 				else if (step.endStep) {
 					p2->update(timeFactor);
 				}
 			}
-
-			firstLoop = false;
 
 		} while (!step.endStep);
 
@@ -311,7 +282,7 @@ class $modify(PlayerObject) {
 		auto& manager = cbf::Manager::get();
 		PlayLayer* pl = PlayLayer::get();
 		if (!manager.skipUpdate && pl && this == pl->m_player1) {
-			PlayerObject::updateRotation(manager.p1RotationDelta);
+			PlayerObject::updateRotation(manager.rotationDelta);
 
 			if (manager.p1Pos.x && !manager.midStep) { // to happen only when GJBGL::update() calls updateRotation after an input
 				this->m_lastPosition = manager.p1Pos;
@@ -319,7 +290,7 @@ class $modify(PlayerObject) {
 			}
 		}
 		else if (!manager.skipUpdate && pl && this == pl->m_player2) {
-			PlayerObject::updateRotation(manager.p2RotationDelta);
+			PlayerObject::updateRotation(manager.rotationDelta);
 
 			if (manager.p2Pos.x && !manager.midStep) {
 				pl->m_player2->m_lastPosition = manager.p2Pos;

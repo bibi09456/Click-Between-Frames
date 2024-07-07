@@ -3,6 +3,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_OSX_ARCHITECTURES "arm64")
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+# set(SKIP_BUILDING_CODEGEN OFF)
 
 project(ClickBetweenFrames VERSION 1.0.0)
 
@@ -27,5 +28,4 @@ endif()
 
 add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
-# Set up dependencies, resources, link Geode
 setup_geode_mod(${PROJECT_NAME})
