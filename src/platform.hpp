@@ -56,9 +56,6 @@ struct Manager {
     bool enableInput = false;
     bool lateCutoff = false;
 
-    bool enableP1CollisionAndRotation = true;
-    bool enableP2CollisionAndRotation = true;
-
     float p1CollisionDelta;
     float p2CollisionDelta;
     bool actualDelta = false;
