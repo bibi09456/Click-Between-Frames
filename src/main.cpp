@@ -167,7 +167,6 @@ class $modify(CCDirector) {
 
 float p1CollisionDelta;
 float p2CollisionDelta;
-bool actualDelta;
 
 class $modify(GJBaseGameLayer) {
 	static void onModify(auto & self) {
